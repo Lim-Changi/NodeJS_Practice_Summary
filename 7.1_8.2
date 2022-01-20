@@ -1,0 +1,79 @@
+# 성능 Performance
+
+## 7.1 이벤트 루프를 막지 말자
+
+> CPU 에 부담이 가는 Blocking 작업들은 Single Thread 인 Event Loop 를 블로킹할 수 있으므로 조심해서 사용하도록 하자.
+
+### NodeJS의 `Event Loop`는 대부분 싱글스레드 위에서 여러 큐에 의해 핸들링 된다.
+
+- Event Loop<br>
+  <img src="https://evan-moon.github.io/static/dfece5e35b7d9e50b6eac8adb1a348b8/949b7/nodejs-event-loop-phase.png" width=400 > [[출처]](https://evan-moon.github.io/2019/08/01/nodejs-event-loop-workflow/)<br>
+- 실행 순서<br>
+  <img src= "https://media.vlpt.us/images/dami/post/8e5c1b68-101c-4fff-8090-7024ff2730c0/%E1%84%86%E1%85%A1%E1%84%8B%E1%85%B5%E1%84%8F%E1%85%B3%E1%84%85%E1%85%A9%E1%84%90%E1%85%A2%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3.gif" width=600> [[출처]](https://velog.io/@dami/JS-Microtask-Queue) <br>
+
+- 예시
+
+  ```javascript
+  setTimeout(() => alert("timeout"));
+
+  Promise.resolve().then(() => alert("promise"));
+
+  alert("code");
+
+  // code -> promise -> timeout
+  ```
+
+## Blocking 작업 예시
+
+- Large JSON parsing
+- Large Array 로직 적용
+- Unsafe RegEx
+- 작업량이 큰 I/O
+
+> Event Loop가 Blocking 되는 것을 방지하기 위해서 이러한 작업들을 **`libuv`** 의 판단아래, OS Kernel 혹은 Worker Thread 로 넘겨 처리한다. -> <u>Offloading</u>
+
+<br><hr>
+
+## 7.2 외부 Util 라이브러리 대신, (내장된) Native 자바스크립트 Method 사용하도록하자
+
+> Native Method 대신 외부 Util 라이브러리를 쓰는 것은 불필요한 의존성과 성능 저하를 야기할 수 있다.
+
+### **`Lodash`** vs **`V8 Native Method`**
+
+ <img src="https://github.com/goldbergyoni/nodebestpractices/raw/master/assets/images/sampleMeanDiag.png" width=1000>
+
+- 같은 요청을 처리할때, Lodash Method 가 V8 Engine Method 에 비해 약 146% 시간이 더 오래걸린다.
+- 특정 Method의 경우, Lodash 가 빠른 경우도 있지만, 전체적인 효율성을 생각해서 **`Native Method`** 를 사용하도록 하자.
+
+<br><br><br><hr>
+
+# Docker 모범 사례
+
+## 8.1 안전한 도커 이미지를 위해 Multi Stage 빌드를 활용하자
+
+### **`Docker Multi Stage`** ?
+
+> 컨테이너 이미지를 만들면서 빌드 등에는 필요하지만 최종 컨테이너 이미지에는 필요 없는 환경을 제거할 수 있도록 단계를 나누어서 기반 이미지를 만드는 방법
+
+- Multi Stage 빌드를 통해, 보안위협 방지와 상용서버에 불필요한 요소를 쉽게 관리할 수 있다. [[참고]](https://velog.io/@guri_coding/%EC%95%BC-Docker-%EC%9D%B4%EB%A6%AC%EB%82%98%EC%99%80-5-Multi-Stage-builds)
+
+<br><hr>
+
+## 8.2 npm start 대신, node 커맨드를 활용하여 BootStrap 하자
+
+### **`CMD ["node", "dist/index.js"]`** <br><br>
+
+> node command 를 통해 부팅해야 <u>child-process</u>, <u>signal-handling</u>, <u>graceful shutdown</u> 등 문제를 방지할 수 있다.
+
+> npm 스크립트는 OS signal를 통과하지 않는다.
+>
+> > 정상적인 종료(Graceful Shutdown) 가 이루어지지 않을 수 있다.
+
+### **`Graceful Shutdown`** ? <-> Hard Shutdown
+
+> 프로그램이 종료될 때, 최대한 사이드 이펙트 없이 로직을 잘 처리하고 종료하는 것을 말한다.
+
+- ex) 퇴근시,
+  - 코드를 커밋하고 푸시한 뒤 컴퓨터를 끄고 퇴근하는 것: `graceful shutdown`
+  - 그대로 컴퓨터를 바로 끄고 퇴근하는 것: hard shutdown
+    > 현재 처리중인 요청이나 데이터가 유실되지 않고 전부 처리가 된 후에 정상적으로 종료되는 것으로 볼 수 있다.
